@@ -3,11 +3,20 @@
 # Block 7 — Multi-Task Loss & Training Loop
 # ============================================================
 
-BEST_MODEL_PATH = "./ncfn_best_model.pt"
+import torch
+import torch.nn as nn
+import torch.optim as optim
+import numpy as np
+import time
+from dataclasses import asdict
+from typing import Dict, Tuple
+from torch.utils.data import DataLoader
+
+BEST_MODEL_PATH    = "./ncfn_best_model.pt"
 LOG_EVERY_N_EPOCHS = 5
 
 
-# ─── Multi-Task Uncertainty-Weighted Loss (Kendall et al. 2018) ─
+# --- Multi-Task Uncertainty-Weighted Loss (Kendall et al. 2018) ---
 
 class MultiTaskLoss(nn.Module):
     """
@@ -42,26 +51,19 @@ class MultiTaskLoss(nn.Module):
         """
         Returns total weighted loss and a dict of per-task unweighted losses.
         """
-        task_losses: Dict[str, float] = {}
-
-        # ── Per-task raw losses ───────────────────────────────
-        # Persona
+        # Per-task raw losses
         l_persona = self.ce_loss(
             predictions["persona_logits"], targets["persona_label"]
         )
-        # Emotion
         l_emotion = self.ce_loss(
             predictions["emotion_logits"], targets["emotion_label"]
         )
-        # Pitch shift (squeeze regression output)
         l_pitch = self.mse_loss(
             predictions["pitch_pred"].squeeze(-1), targets["pitch_shift"]
         )
-        # Speaking rate
         l_rate = self.mse_loss(
             predictions["rate_pred"].squeeze(-1), targets["speaking_rate"]
         )
-        # Style
         l_style = self.ce_loss(
             predictions["style_logits"], targets["style_label"]
         )
@@ -72,22 +74,20 @@ class MultiTaskLoss(nn.Module):
             for name, raw in zip(self.TASK_NAMES, raw_losses)
         }
 
-        # ── Uncertainty-weighted combination ─────────────────
+        # Uncertainty-weighted combination
         total = torch.zeros(1, device=next(self.parameters()).device)
 
         for i, (raw, task_type) in enumerate(zip(raw_losses, self.TASK_TYPES)):
             log_var = self.log_vars[i]
             if task_type == "cls":
-                # precision = exp(-log_var)
                 total = total + torch.exp(-log_var) * raw + 0.5 * log_var
             else:
-                # regression: factor 2 in denominator for Gaussian noise model
                 total = total + 0.5 * torch.exp(-log_var) * raw + 0.5 * log_var
 
         return total.squeeze(), task_losses
 
 
-# ─── Optimizer & Scheduler ───────────────────────────────────
+# --- Optimizer & Scheduler -----------------------------------
 
 multi_task_loss_fn = MultiTaskLoss().to(cfg.DEVICE)
 
@@ -103,7 +103,7 @@ scheduler = optim.lr_scheduler.CosineAnnealingLR(
 )
 
 
-# ─── Metric Tracking ─────────────────────────────────────────
+# --- Metric Tracking -----------------------------------------
 
 history = {
     "train_loss":      [],
@@ -116,7 +116,7 @@ history = {
 }
 
 
-# ─── Helper: Evaluation Pass ─────────────────────────────────
+# --- Helper: Evaluation Pass ---------------------------------
 
 def evaluate(loader: DataLoader) -> Dict[str, float]:
     """Run model on loader, return aggregated metrics."""
@@ -151,7 +151,6 @@ def evaluate(loader: DataLoader) -> Dict[str, float]:
             total_loss += loss.item()
             n_batches  += 1
 
-            # Accumulate predictions
             all_persona_pred.append(preds["persona_logits"].argmax(dim=1).cpu().numpy())
             all_persona_true.append(batch["persona_label"].numpy())
             all_emotion_pred.append(preds["emotion_logits"].argmax(dim=1).cpu().numpy())
@@ -163,7 +162,6 @@ def evaluate(loader: DataLoader) -> Dict[str, float]:
             all_rate_pred.append(preds["rate_pred"].squeeze(-1).cpu().numpy())
             all_rate_true.append(batch["speaking_rate"].numpy())
 
-    # Concatenate
     persona_pred = np.concatenate(all_persona_pred)
     persona_true = np.concatenate(all_persona_true)
     emotion_pred = np.concatenate(all_emotion_pred)
@@ -177,15 +175,15 @@ def evaluate(loader: DataLoader) -> Dict[str, float]:
 
     return {
         "val_loss":        total_loss / max(n_batches, 1),
-        "val_persona_acc": accuracy_score(persona_true, persona_pred),
-        "val_emotion_acc": accuracy_score(emotion_true, emotion_pred),
-        "val_style_acc":   accuracy_score(style_true, style_pred),
-        "val_pitch_mae":   mean_absolute_error(pitch_true, pitch_pred),
-        "val_rate_mae":    mean_absolute_error(rate_true, rate_pred_v),
+        "val_persona_acc": np_accuracy(persona_true, persona_pred),
+        "val_emotion_acc": np_accuracy(emotion_true, emotion_pred),
+        "val_style_acc":   np_accuracy(style_true, style_pred),
+        "val_pitch_mae":   np_mae(pitch_true, pitch_pred),
+        "val_rate_mae":    np_mae(rate_true, rate_pred_v),
     }
 
 
-# ─── Training Loop ────────────────────────────────────────────
+# --- Training Loop -------------------------------------------
 
 best_val_loss  = float("inf")
 train_start    = time.time()
@@ -197,7 +195,7 @@ print(f"  Epochs: {cfg.NUM_EPOCHS}  |  LR: {cfg.LEARNING_RATE}  |  "
 print("=" * 60)
 
 for epoch in range(1, cfg.NUM_EPOCHS + 1):
-    # ── Train Phase ──────────────────────────────────────────
+    # Train Phase
     model.train()
     multi_task_loss_fn.train()
     epoch_train_loss = 0.0
@@ -236,12 +234,12 @@ for epoch in range(1, cfg.NUM_EPOCHS + 1):
     avg_train_loss = epoch_train_loss / max(n_train_batches, 1)
     history["train_loss"].append(avg_train_loss)
 
-    # ── Validation Phase ─────────────────────────────────────
+    # Validation Phase
     val_metrics = evaluate(val_loader)
     for k, v in val_metrics.items():
         history[k].append(v)
 
-    # ── Save Best Model ───────────────────────────────────────
+    # Save Best Model
     if val_metrics["val_loss"] < best_val_loss:
         best_val_loss = val_metrics["val_loss"]
         torch.save({
@@ -252,7 +250,7 @@ for epoch in range(1, cfg.NUM_EPOCHS + 1):
             "config":       asdict(cfg),
         }, BEST_MODEL_PATH)
 
-    # ── Logging ───────────────────────────────────────────────
+    # Logging
     if epoch % LOG_EVERY_N_EPOCHS == 0 or epoch == 1:
         elapsed = time.time() - train_start
         print(
@@ -272,6 +270,6 @@ total_time = time.time() - train_start
 print("=" * 60)
 print(f"  Training Complete in {total_time:.1f}s")
 print(f"  Best Val Loss: {best_val_loss:.4f}")
-print(f"  Model saved → {BEST_MODEL_PATH}")
+print(f"  Model saved -> {BEST_MODEL_PATH}")
 print("=" * 60)
-print("\n[Block 7] Multi-task training loop — DONE")
+print("\n[Block 7] Multi-task training loop -- DONE")
