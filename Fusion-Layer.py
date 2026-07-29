@@ -3,6 +3,10 @@
 # Block 5 — Cross-Modal Attention Fusion Layer
 # ============================================================
 
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+
 
 class CrossModalAttentionFusion(nn.Module):
     """
@@ -13,7 +17,7 @@ class CrossModalAttentionFusion(nn.Module):
     Output: [B, FUSION_DIM]
     """
 
-    def __init__(self, config: NCFNConfig):
+    def __init__(self, config):
         super().__init__()
 
         D_token  = config.FUSION_DIM // 3      # token dimension (each modality)
@@ -27,7 +31,6 @@ class CrossModalAttentionFusion(nn.Module):
         self.pre_norm_chat     = nn.LayerNorm(D_token)
 
         # Multi-head self-attention over the 3-token sequence
-        # Requires embed_dim divisible by num_heads
         assert D_token % n_heads == 0, (
             f"D_token ({D_token}) must be divisible by NUM_ATTENTION_HEADS ({n_heads}). "
             f"FUSION_DIM // 3 = {D_token}. Adjust FUSION_DIM or NUM_ATTENTION_HEADS."
@@ -51,7 +54,7 @@ class CrossModalAttentionFusion(nn.Module):
         )
         self.post_ffn_norm = nn.LayerNorm(D_token)
 
-        # Final projection: [B, 3 * D_token] → [B, FUSION_DIM]
+        # Final projection: [B, 3 * D_token] -> [B, FUSION_DIM]
         self.out_proj = nn.Sequential(
             nn.Linear(3 * D_token, D_fusion),
             nn.LayerNorm(D_fusion),
@@ -92,7 +95,7 @@ class CrossModalAttentionFusion(nn.Module):
         return fused
 
 
-# ─── Instantiate and Inspect ─────────────────────────────────
+# --- Instantiate and Inspect ---------------------------------
 
 fusion_layer = CrossModalAttentionFusion(cfg)
 
@@ -114,6 +117,6 @@ _g_feat  = torch.randn(4, _D_token)
 _c_feat  = torch.randn(4, _D_token)
 _fused   = fusion_layer(_s_feat, _g_feat, _c_feat)
 print(f"\n[Shape Check]")
-print(f"  Input tokens : 3 × (4, {_D_token})")
+print(f"  Input tokens : 3 x (4, {_D_token})")
 print(f"  Fused output : {tuple(_fused.shape)}  (expected (4, {cfg.FUSION_DIM}))")
-print("\n[Block 5] Cross-modal attention fusion layer — DONE")
+print("\n[Block 5] Cross-modal attention fusion layer -- DONE")
