@@ -3,11 +3,16 @@
 # Block 6 — Full NCFN Model
 # ============================================================
 
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+from typing import Dict
+
 
 def _make_classification_head(
     in_dim: int, out_classes: int, dropout: float
 ) -> nn.Sequential:
-    """Standard classification head: Linear → GELU → Dropout → Linear."""
+    """Standard classification head: Linear -> GELU -> Dropout -> Linear."""
     return nn.Sequential(
         nn.Linear(in_dim, in_dim // 2),
         nn.GELU(),
@@ -19,7 +24,7 @@ def _make_classification_head(
 def _make_regression_head(
     in_dim: int, dropout: float
 ) -> nn.Sequential:
-    """Standard regression head: Linear → GELU → Dropout → Linear(1)."""
+    """Standard regression head: Linear -> GELU -> Dropout -> Linear(1)."""
     return nn.Sequential(
         nn.Linear(in_dim, in_dim // 4),
         nn.GELU(),
@@ -30,12 +35,12 @@ def _make_regression_head(
 
 class NCFNModel(nn.Module):
     """
-    Neural Context Fusion Network — full multimodal model.
+    Neural Context Fusion Network -- full multimodal model.
 
     Architecture:
-        SpeechEncoder   ─┐
-        GameplayEncoder  ├─► CrossModalAttentionFusion ─► Multi-task Heads
-        ChatEncoder     ─┘
+        SpeechEncoder   -+
+        GameplayEncoder  +-> CrossModalAttentionFusion -> Multi-task Heads
+        ChatEncoder     -+
 
     Outputs:
         persona_logits  : [B, NUM_PERSONAS]
@@ -45,19 +50,19 @@ class NCFNModel(nn.Module):
         style_logits    : [B, NUM_STYLES]
     """
 
-    def __init__(self, config: NCFNConfig):
+    def __init__(self, config):
         super().__init__()
         self.config = config
 
-        # ── Encoders ─────────────────────────────────────────
+        # Encoders
         self.speech_encoder   = SpeechEncoder(config)
         self.gameplay_encoder = GameplayEncoder(config)
         self.chat_encoder     = ChatEncoder(config)
 
-        # ── Fusion Layer ──────────────────────────────────────
+        # Fusion Layer
         self.fusion = CrossModalAttentionFusion(config)
 
-        # ── Multi-task Heads ──────────────────────────────────
+        # Multi-task Heads
         D = config.FUSION_DIM
         drop = config.DROPOUT_RATE
 
@@ -74,15 +79,15 @@ class NCFNModel(nn.Module):
         chat:     torch.Tensor,   # [B, CHAT_EMBED_DIM]
     ) -> Dict[str, torch.Tensor]:
 
-        # ── Encode each modality ─────────────────────────────
+        # Encode each modality
         s = self.speech_encoder(speech)       # [B, FUSION_DIM // 3]
         g = self.gameplay_encoder(gameplay)   # [B, FUSION_DIM // 3]
         c = self.chat_encoder(chat)           # [B, FUSION_DIM // 3]
 
-        # ── Fuse modalities ───────────────────────────────────
+        # Fuse modalities
         fused = self.fusion(s, g, c)          # [B, FUSION_DIM]
 
-        # ── Multi-task predictions ────────────────────────────
+        # Multi-task predictions
         persona_logits = self.persona_head(fused)   # [B, NUM_PERSONAS]
         emotion_logits = self.emotion_head(fused)   # [B, NUM_EMOTIONS]
         pitch_pred     = self.pitch_head(fused)     # [B, 1]
@@ -98,7 +103,7 @@ class NCFNModel(nn.Module):
         }
 
 
-# ─── Instantiate Model ────────────────────────────────────────
+# --- Instantiate Model ----------------------------------------
 
 model = NCFNModel(cfg).to(cfg.DEVICE)
 
@@ -124,11 +129,10 @@ print(f"\n[Architecture]")
 print(f"  Encoder params    : {encoder_params:>10,}")
 print(f"  Fusion params     : {fusion_params:>10,}")
 print(f"  Head params       : {head_params:>10,}")
-print(f"  ─────────────────────────────")
 print(f"  TOTAL params      : {total_params:>10,}")
 print(f"  Device            : {cfg.DEVICE}")
 
-# ─── Forward Pass Shape Verification ─────────────────────────
+# --- Forward Pass Shape Verification -------------------------
 
 _B = 8  # test batch size
 _dummy_speech   = torch.randn(_B, cfg.SPEECH_EMBED_DIM).to(cfg.DEVICE)
@@ -139,7 +143,7 @@ model.eval()
 with torch.no_grad():
     _outputs = model(_dummy_speech, _dummy_gameplay, _dummy_chat)
 
-print(f"\n[Forward Pass — batch size {_B}]")
+print(f"\n[Forward Pass -- batch size {_B}]")
 print(f"  persona_logits : {tuple(_outputs['persona_logits'].shape)}"
       f"  (expected ({_B}, {cfg.NUM_PERSONAS}))")
 print(f"  emotion_logits : {tuple(_outputs['emotion_logits'].shape)}"
@@ -152,4 +156,4 @@ print(f"  style_logits   : {tuple(_outputs['style_logits'].shape)}"
       f"  (expected ({_B}, {cfg.NUM_STYLES}))")
 
 model.train()  # reset to train mode for the training block
-print("\n[Block 6] Full NCFN model — DONE")
+print("\n[Block 6] Full NCFN model -- DONE")
