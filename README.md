@@ -8,7 +8,7 @@ NCFN does not replace text-to-speech systems. Instead, it operates as an upstrea
 
 The framework is designed for latency-sensitive streaming contexts where the voice of an AI game commentator or assistant must respond dynamically to rapidly changing game events, audience sentiment, and conversational cues -- producing natural, engaging, and contextually appropriate speech in real time.
 
-<img width="1800" height="1000" alt="ZREX N2FC" src="https://github.com/user-attachments/assets/d88cfdba-2787-4192-9ec4-a22daf9f51b7" />
+<img width="1800" height="1000" alt="ZREX N2FC" src="https://github.com/user-attachments/assets/f2913cb7-b256-4c44-8e6c-75f6b8e49307" />
 
 ---
 
