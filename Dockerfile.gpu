@@ -1,0 +1,22 @@
+# NCFN — GPU-accelerated image, for training runs.
+# Requires an NVIDIA GPU, driver, and the NVIDIA Container Toolkit on
+# the host (`docker run --gpus all ...`).
+
+FROM nvidia/cuda:12.4.1-runtime-ubuntu22.04
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        python3 python3-pip \
+    && rm -rf /var/lib/apt/lists/* \
+    && ln -sf /usr/bin/python3 /usr/bin/python
+
+COPY requirements.txt .
+
+# CUDA-enabled torch first, matching the CUDA runtime above.
+RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cu121 \
+    && pip install --no-cache-dir -r requirements.txt
+
+COPY . /app
+
+CMD ["python", "run_pipeline.py"]

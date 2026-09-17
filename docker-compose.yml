@@ -1,0 +1,16 @@
+version: "3.9"
+
+# CPU service by default. For GPU, build/run Dockerfile.gpu directly
+# with `docker run --gpus all` — Compose's GPU device syntax varies by
+# Docker version, so it's kept out of this default file.
+
+services:
+  ncfn:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - "./output:/app/output"
+    # Training/evaluation checkpoints and the visualization dashboard
+    # (Block 07/08/09 outputs) should be written to /app/output inside
+    # the container so they land in ./output on the host.
