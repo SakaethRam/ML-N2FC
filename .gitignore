@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Training artifacts
+output/
+*.pt
+*.pth
+checkpoints/
+
+# Visualization output
+*.png
+!docs/**/*.png
+
+# OS/editor cruft
+.DS_Store
+.vscode/
+.idea/
