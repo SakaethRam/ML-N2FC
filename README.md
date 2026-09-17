@@ -8,6 +8,8 @@ NCFN does not replace text-to-speech systems. Instead, it operates as an upstrea
 
 The framework is designed for latency-sensitive streaming contexts where the voice of an AI game commentator or assistant must respond dynamically to rapidly changing game events, audience sentiment, and conversational cues -- producing natural, engaging, and contextually appropriate speech in real time.
 
+<img width="1800" height="1000" alt="ZREX N2FC" src="https://github.com/user-attachments/assets/d88cfdba-2787-4192-9ec4-a22daf9f51b7" />
+
 ---
 
 ## Architecture Diagram
@@ -136,3 +138,9 @@ The inference pipeline in Block 10 converts NCFN predictions into ElevenLabs API
 - Matplotlib
 
 No other dependencies are required. scikit-learn is NOT used; all evaluation metrics are implemented in Block 01 using NumPy.
+
+---
+
+# License
+
+ML-N2FC is distributed under the terms defined in `LICENSE`.
